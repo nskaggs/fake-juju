@@ -9,9 +9,9 @@ import (
 	"github.com/juju/juju/agent"
 	"github.com/juju/juju/state"
 	"github.com/juju/juju/testing/factory"
-	"github.com/juju/juju/version"
 	"github.com/juju/utils"
 	"github.com/juju/juju/jujuclient"
+	"github.com/juju/juju/status"
 
 	coretesting "github.com/juju/juju/juju/testing"
 	jujutesting "github.com/juju/juju/testing"
@@ -30,37 +30,45 @@ func (s *FakeJujuServiceSuite) SetUpTest(c *gc.C) {
 	options := &service.FakeJujuOptions{
 		Mongo: -1,  // Use the MongoDB instance that the suite will setup
 	}
-	s.service = service.NewFakeJujuService(s.State, s.APIState, options)
+	s.service = service.NewFakeJujuService(s.BackingState, s.APIState, options)
 }
 
 // The Initialize() method performs various initialization tasks.
 func (s *FakeJujuServiceSuite) TestInitialize(c *gc.C) {
-	err := s.service.Initialize()
-	c.Assert(err, gc.IsNil)
-	c.Assert(utils.OutgoingAccessAllowed, gc.Equals, true)
-
-	ports, err := s.State.APIHostPorts()
-	c.Assert(err, gc.IsNil)
-	c.Assert(string(ports[0][0].SpaceName), gc.Equals, "dummy-provider-network")
-}
-
-// The InitializeController() method configures the controller machine.
-func (s *FakeJujuServiceSuite) TestInitializeController(c *gc.C) {
 	controller := s.Factory.MakeMachine(c, &factory.MachineParams{
 		InstanceId: s.service.NewInstanceId(),
 		Nonce:      agent.BootstrapNonce,
 		Jobs:       []state.MachineJob{state.JobManageModel, state.JobHostUnits},
 		Series:     "xenial",
 	})
-	err := s.service.InitializeController(controller)
+
+	err := s.service.Initialize()
 	c.Assert(err, gc.IsNil)
 
-	tools, err := controller.AgentTools()
+	// We want to be able to access the charm store
+	c.Assert(utils.OutgoingAccessAllowed, gc.Equals, true)
+
+	// There's a space defined
+	ports, err := s.State.APIHostPorts()
 	c.Assert(err, gc.IsNil)
-	c.Assert(
-		tools.Version.String(),
-		gc.Equals,
-		version.Current.String()+"-xenial-amd64")
+	c.Assert(string(ports[0][0].SpaceName), gc.Equals, "dummy-provider-network")
+
+	// The controller machine is configured
+	machineStatus, err := controller.Status()
+	c.Check(err, gc.IsNil)
+	c.Check(machineStatus.Status, gc.Equals, status.Started)
+
+	instanceStatus, err := controller.InstanceStatus()
+	c.Check(err, gc.IsNil)
+	c.Check(instanceStatus.Status, gc.Equals, status.Running)
+
+	s.State.StartSync()
+	err = controller.WaitAgentPresence(jujutesting.ShortWait)
+	c.Assert(err, gc.IsNil)
+
+	alive, err := controller.AgentPresence()
+	c.Assert(err, gc.IsNil)
+	c.Assert(alive, gc.Equals, true)
 }
 
 // The WriteJujuData() method writes config files to a directory that

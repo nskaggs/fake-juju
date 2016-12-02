@@ -43,7 +43,7 @@ func RunFakeJuju() int {
 
 	runner := NewFakeJujuRunner(suite, options)
 	result := runner.Run()
-
+	
 	if result.Succeeded == 1 {
 		return 0
 	} else {
@@ -106,11 +106,7 @@ func (f *FakeJujuRunner) Run() *gc.Result {
 func logResult(result *gc.Result) {
 
 	if !(result.Succeeded == 1) {
-		message := "Unknown error"
-		if result.RunError != nil {
-			message = result.RunError.Error()
-		}
-		log.Infof("Service finished uncleanly: %s", message)
+		log.Infof("Service finished uncleanly: %s", result.String())
 	} else {
 		log.Infof("Service finished cleanly")
 	}

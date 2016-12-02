@@ -33,19 +33,22 @@ func (s *FakeJujuSuite) SetUpTest(c *gc.C) {
 
 	s.PatchValue(&corecharm.CacheDir, c.MkDir())
 
-	s.service = NewFakeJujuService(s.State, s.APIState, s.options)
-	err := s.service.Initialize()
-	c.Assert(err, gc.IsNil)
+	s.service = NewFakeJujuService(s.BackingState, s.APIState, s.options)
 
-	controller := s.Factory.MakeMachine(c, &factory.MachineParams{
+	// Create machine 0
+	log.Infof("Creating controller machine")
+	s.Factory.MakeMachine(c, &factory.MachineParams{
 		InstanceId: s.service.NewInstanceId(),
 		Nonce:      agent.BootstrapNonce,
 		Jobs:       []state.MachineJob{state.JobManageModel, state.JobHostUnits},
 		Series:     s.options.Series,
 	})
-	err = s.service.InitializeController(controller)
+
+	// Initialize the service
+	err := s.service.Initialize()
 	c.Assert(err, gc.IsNil)
 
+	// Dump controller and model info to the given JUJU_DATA dir.
 	if s.options.JujuData == "" {
 		s.options.JujuData = c.MkDir()
 	}

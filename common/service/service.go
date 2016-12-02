@@ -19,9 +19,10 @@ import (
 	"github.com/juju/juju/version"
 	"github.com/juju/loggo"
 	"github.com/juju/utils"
-
-	semversion "github.com/juju/version"
 )
+
+// Value used when waiting for events like agent presence synchronization.
+const MediumWait = 2 * time.Second
 
 // Runtime options for the fake-juju service
 type FakeJujuOptions struct {
@@ -53,7 +54,7 @@ func NewFakeJujuService(
 }
 
 type FakeJujuService struct {
-	state         *state.State
+	state         *state.State // "backing" state, the one connected to the API server
 	api           api.Connection
 	options       *FakeJujuOptions
 	instanceCount int
@@ -61,6 +62,7 @@ type FakeJujuService struct {
 
 // Main initialization entry point
 func (s *FakeJujuService) Initialize() error {
+	log.Infof("Initializing the service")
 
 	// Juju needs internet access to reach the charm store.  This is
 	// necessary to download charmstore charms (e.g. when adding a
@@ -95,38 +97,11 @@ func (s *FakeJujuService) Initialize() error {
 		return err
 	}
 
-	return nil
-}
-
-// Initialize the controller machine (aka machine 0).
-func (s *FakeJujuService) InitializeController(controller *state.Machine) error {
-	currentVersion := version.Current.String()
-
-	agentVersion, err := semversion.ParseBinary(currentVersion + "-xenial-amd64")
+	err = s.startMachine("0")
 	if err != nil {
 		return err
 	}
 
-	controller.SetAgentVersion(agentVersion)
-
-	address := network.NewScopedAddress("127.0.0.1", network.ScopeCloudLocal)
-	if err := controller.SetProviderAddresses(address); err != nil {
-		return err
-	}
-
-	now := time.Now()
-	info := status.StatusInfo{
-		Status:  status.Started,
-		Message: "",
-		Since:   &now,
-	}
-	if err := controller.SetStatus(info); err != nil {
-		return err
-	}
-
-	if _, err := controller.SetAgentPresence(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -139,6 +114,8 @@ func (s *FakeJujuService) NewInstanceId() instance.Id {
 // The environ object is typically provided by JujuConnSuite.Environ.
 func (s *FakeJujuService) WriteJujuData(
 	environ environs.Environ, config controller.Config, path string) error {
+	log.Infof("Writing JUJU_DATA files")
+
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		err = os.Mkdir(path, 0755)
 		if err != nil {
@@ -169,6 +146,52 @@ func (s *FakeJujuService) WriteJujuData(
 	if err := s.writeJujuDataModels(); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Start a machine (i.e. transition it from pending to started)
+func (s *FakeJujuService) startMachine(id string) error {
+
+	// Get the machine
+	machine, err := s.state.Machine(id)
+	if err != nil {
+		return err
+	}
+
+	// Set network address
+	address := network.NewScopedAddress("127.0.0.1", network.ScopeCloudLocal)
+	if err := machine.SetProviderAddresses(address); err != nil {
+		return err
+	}
+
+	// Set agent and instance status
+	now := testing.ZeroTime()
+	err = machine.SetStatus(status.StatusInfo{
+		Status:  status.Started,
+		Message: "",
+		Since:   &now,
+	})
+	if err != nil {
+		return err
+	}
+	err = machine.SetInstanceStatus(status.StatusInfo{
+		Status:  status.Running,
+		Message: "",
+		Since:   &now,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Set agent presence
+	if _, err := machine.SetAgentPresence(); err != nil {
+		return err
+	}
+	s.state.StartSync()
+	if err := machine.WaitAgentPresence(MediumWait); err != nil {
+		return err
+	}
+
 	return nil
 }
 
