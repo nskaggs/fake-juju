@@ -14,6 +14,7 @@ import (
 	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/network"
 	"github.com/juju/juju/state"
+	"github.com/juju/juju/state/multiwatcher"
 	"github.com/juju/juju/status"
 	"github.com/juju/juju/testing"
 	"github.com/juju/juju/version"
@@ -50,6 +51,7 @@ func NewFakeJujuService(
 		state:   state,
 		api:     api,
 		options: options,
+		errored: make(chan error, 1),
 	}
 }
 
@@ -57,6 +59,8 @@ type FakeJujuService struct {
 	state         *state.State // "backing" state, the one connected to the API server
 	api           api.Connection
 	options       *FakeJujuOptions
+	watcher       *state.Multiwatcher
+	errored       chan error // channel collecting fatal errors
 	instanceCount int
 }
 
@@ -97,15 +101,10 @@ func (s *FakeJujuService) Initialize() error {
 		return err
 	}
 
-	err = s.startMachine("0")
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func (s *FakeJujuService) NewInstanceId() instance.Id {
+func (s *FakeJujuService) newInstanceId() instance.Id {
 	s.instanceCount += 1
 	return instance.Id(fmt.Sprintf("id-%d", s.instanceCount))
 }
@@ -149,14 +148,22 @@ func (s *FakeJujuService) WriteJujuData(
 	return nil
 }
 
-// Start a machine (i.e. transition it from pending to started)
-func (s *FakeJujuService) startMachine(id string) error {
+// Start the service. It will watch for changes and react accordingly.
+func (s *FakeJujuService) Start() {
+	s.watcher = s.state.Watch()
+	go func() {
+		s.watch()
+	}()
+}
 
-	// Get the machine
-	machine, err := s.state.Machine(id)
-	if err != nil {
-		return err
-	}
+// Main initialization entry point
+func (s *FakeJujuService) Stop() error {
+	return s.watcher.Stop()
+}
+
+// Start a machine (i.e. transition it from pending to started)
+func (s *FakeJujuService) startMachine(machine *state.Machine) error {
+	log.Infof("Starting machine %s", machine.Tag())
 
 	// Set network address
 	address := network.NewScopedAddress("127.0.0.1", network.ScopeCloudLocal)
@@ -164,13 +171,21 @@ func (s *FakeJujuService) startMachine(id string) error {
 		return err
 	}
 
-	// Set agent and instance status
+	// Set agent status
 	now := testing.ZeroTime()
-	err = machine.SetStatus(status.StatusInfo{
+	err := machine.SetStatus(status.StatusInfo{
 		Status:  status.Started,
 		Message: "",
 		Since:   &now,
 	})
+	if err != nil {
+		return err
+	}
+
+	// Set instance status
+	characteristics := &instance.HardwareCharacteristics{}
+	id := s.newInstanceId()
+	err = machine.SetProvisioned(id, "dummy-nonce", characteristics)
 	if err != nil {
 		return err
 	}
@@ -236,4 +251,69 @@ func (s *FakeJujuService) writeJujuDataModels() error {
 	return jujuclient.WriteModelsFile(map[string]*jujuclient.ControllerModels{
 		"fake-juju": models,
 	})
+}
+
+// Watch the model forever and react to changes
+func (s *FakeJujuService) watch() {
+	for {
+		deltas, err := s.watcher.Next()
+		if err != nil {
+			if err.Error() != state.ErrStopped.Error() {
+				log.Errorf("Watcher error: %s", err.Error())
+				s.errored <- err
+			}
+			break
+		}
+		for _, delta := range deltas {
+			if err := s.handleDelta(delta); err != nil {
+				log.Errorf("Delta error: %s", err.Error())
+				s.errored <- err
+			}
+		}
+	}
+}
+
+// Handle an entity delta
+func (s *FakeJujuService) handleDelta(delta multiwatcher.Delta) error {
+	entity := delta.Entity.EntityId()
+	log.Infof("Delta for %s-%s (removed: %t)", entity.Kind, entity.Id, delta.Removed)
+	if delta.Removed {
+		return nil
+	} else {
+		return s.handleEntityChanged(entity)
+	}
+}
+
+// Handle a changed entity
+func (s *FakeJujuService) handleEntityChanged(entity multiwatcher.EntityId) error {
+	if entity.Kind == "machine" {
+		return s.handleMachineChanged(entity.Id)
+	} else {
+		log.Infof("Ignoring kind %s", entity.Kind)
+		return nil
+	}
+}
+
+// Handle a changed machine
+func (s *FakeJujuService) handleMachineChanged(id string) error {
+	log.Infof("Handling changed machine %s", id)
+
+	// Get the machine
+	machine, err := s.state.Machine(id)
+	if err != nil {
+		return err
+	}
+
+	st, err := machine.Status()
+	if err != nil {
+		return err
+	}
+
+	if st.Status == status.Pending {
+		if err := s.startMachine(machine); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
