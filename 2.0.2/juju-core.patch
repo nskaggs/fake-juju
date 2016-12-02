@@ -1,6 +1,6 @@
 diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/juju/apiserver/charms.go src/github.com/juju/juju/apiserver/charms.go
 --- .unpacked-clean/github.com/juju/juju/apiserver/charms.go	2016-11-11 00:08:09.000000000 +0000
-+++ src/github.com/juju/juju/apiserver/charms.go	2016-11-30 06:09:26.975210508 +0000
++++ src/github.com/juju/juju/apiserver/charms.go	2016-11-30 06:32:00.756949941 +0000
 @@ -284,7 +284,8 @@
  		if isImporting, err := modelIsImporting(st); err != nil {
  			return nil, errors.Trace(err)
@@ -13,7 +13,7 @@ diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/juju/apiserver/cha
  		// If a revision argument is provided, it takes precedence
 diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/juju/provider/dummy/environs.go src/github.com/juju/juju/provider/dummy/environs.go
 --- .unpacked-clean/github.com/juju/juju/provider/dummy/environs.go	2016-11-11 00:08:09.000000000 +0000
-+++ src/github.com/juju/juju/provider/dummy/environs.go	2016-11-30 06:09:26.977210528 +0000
++++ src/github.com/juju/juju/provider/dummy/environs.go	2016-11-30 06:32:00.757949913 +0000
 @@ -643,9 +643,9 @@
  
  // PrecheckInstance is specified in the state.Prechecker interface.
@@ -29,7 +29,7 @@ diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/juju/provider/dumm
  
 diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/juju/testcharms/charm.go src/github.com/juju/juju/testcharms/charm.go
 --- .unpacked-clean/github.com/juju/juju/testcharms/charm.go	2016-11-11 00:08:09.000000000 +0000
-+++ src/github.com/juju/juju/testcharms/charm.go	2016-11-30 06:09:26.978210538 +0000
++++ src/github.com/juju/juju/testcharms/charm.go	2016-11-30 06:32:00.757949913 +0000
 @@ -17,7 +17,9 @@
  )
  
@@ -43,7 +43,7 @@ diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/juju/testcharms/ch
  // The uploaded charm takes the supplied charmURL with metadata.yaml and metrics.yaml
 diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/juju/testing/cert.go src/github.com/juju/juju/testing/cert.go
 --- .unpacked-clean/github.com/juju/juju/testing/cert.go	2016-11-11 00:08:09.000000000 +0000
-+++ src/github.com/juju/juju/testing/cert.go	2016-11-30 06:09:26.979210548 +0000
++++ src/github.com/juju/juju/testing/cert.go	2016-11-30 06:32:00.757949913 +0000
 @@ -52,7 +52,7 @@
  }
  
@@ -64,7 +64,7 @@ diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/juju/testing/cert.
  	if err != nil {
 diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/testing/log.go src/github.com/juju/testing/log.go
 --- .unpacked-clean/github.com/juju/testing/log.go	2016-11-11 00:08:46.000000000 +0000
-+++ src/github.com/juju/testing/log.go	2016-11-30 06:09:29.817238914 +0000
++++ src/github.com/juju/testing/log.go	2016-11-30 06:32:00.758949885 +0000
 @@ -50,6 +50,9 @@
  }
  
@@ -86,9 +86,48 @@ diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/testing/log.go src
  	loggo.ResetLogging()
  	// Don't use the default writer for the test logging, which
  	// means we can still get logging output from tests that
+diff -U 3 -r --no-dereference .unpacked-clean/github.com/juju/testing/mgo.go src/github.com/juju/testing/mgo.go
+--- .unpacked-clean/github.com/juju/testing/mgo.go	2016-11-11 00:08:46.000000000 +0000
++++ src/github.com/juju/testing/mgo.go	2016-12-01 13:08:58.000863414 +0000
+@@ -4,6 +4,7 @@
+ package testing
+ 
+ import (
++	"syscall"
+ 	"bufio"
+ 	"bytes"
+ 	"crypto/rsa"
+@@ -252,6 +253,14 @@
+ 		inst.WithoutV8 = true
+ 	}
+ 	server := exec.Command(mongopath, mgoargs...)
++	// XXX fake-juju: this *prevents* signals received by the parent process
++	// (i.e. fake-juju itself) from propagating to the child mongod process.
++	// In particular, this is necessary so we can have SIGINT and SIGTERM
++	// handled just by the fake-juju, which will then shutdown mongod by itself.
++	server.SysProcAttr = &syscall.SysProcAttr{
++		Setpgid: true,
++		Pgid: 0,
++	}
+ 	out, err := server.StdoutPipe()
+ 	if err != nil {
+ 		return err
+@@ -900,3 +909,12 @@
+ 	s.MgoSuite.TearDownTest(c)
+ 	s.IsolationSuite.TearDownTest(c)
+ }
++
++// XXX fake-juju: support pointing MgoSuite to an external MongoDB server,
++//     instead of spawning a new one as child process.
++func SetExternalMgoServer(addr string, port int, certs *Certs) error {
++	MgoServer.addr = fmt.Sprintf("%s:%d", addr, port)
++	MgoServer.port = port
++	MgoServer.certs = certs
++	return nil
++}
 diff -U 3 -r --no-dereference .unpacked-clean/gopkg.in/mgo.v2/bson/json.go src/gopkg.in/mgo.v2/bson/json.go
 --- .unpacked-clean/gopkg.in/mgo.v2/bson/json.go	2016-11-11 00:08:13.000000000 +0000
-+++ src/gopkg.in/mgo.v2/bson/json.go	2016-11-30 06:09:26.979210548 +0000
++++ src/gopkg.in/mgo.v2/bson/json.go	2016-11-30 06:32:00.758949885 +0000
 @@ -317,7 +317,8 @@
  func jencInt(v interface{}) ([]byte, error) {
  	n := v.(int)
