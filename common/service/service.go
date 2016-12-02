@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/controller"
@@ -13,6 +14,7 @@ import (
 	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/network"
 	"github.com/juju/juju/state"
+	"github.com/juju/juju/status"
 	"github.com/juju/juju/testing"
 	"github.com/juju/juju/version"
 	"github.com/juju/loggo"
@@ -108,7 +110,24 @@ func (s *FakeJujuService) InitializeController(controller *state.Machine) error 
 	controller.SetAgentVersion(agentVersion)
 
 	address := network.NewScopedAddress("127.0.0.1", network.ScopeCloudLocal)
-	return controller.SetProviderAddresses(address)
+	if err := controller.SetProviderAddresses(address); err != nil {
+		return err
+	}
+
+	now := time.Now()
+	info := status.StatusInfo{
+		Status:  status.Started,
+		Message: "",
+		Since:   &now,
+	}
+	if err := controller.SetStatus(info); err != nil {
+		return err
+	}
+
+	if _, err := controller.SetAgentPresence(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *FakeJujuService) NewInstanceId() instance.Id {
