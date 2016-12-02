@@ -3,11 +3,17 @@ package service
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/juju/juju/api"
+	"github.com/juju/juju/controller"
+	"github.com/juju/juju/environs"
 	"github.com/juju/juju/instance"
+	"github.com/juju/juju/juju/osenv"
+	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/network"
 	"github.com/juju/juju/state"
+	"github.com/juju/juju/testing"
 	"github.com/juju/juju/version"
 	"github.com/juju/loggo"
 	"github.com/juju/utils"
@@ -27,6 +33,10 @@ type FakeJujuOptions struct {
 
 	Cert   string // Path to the directory holding the certificates to use
 	Series string // Default Ubuntu series
+
+	// Path to a directory that will be populated with JUJU_DATA-compatible
+	// files, so the regular command line client can be used with fake-juju.
+	JujuData string
 }
 
 // The core fake-juju service
@@ -104,4 +114,84 @@ func (s *FakeJujuService) InitializeController(controller *state.Machine) error 
 func (s *FakeJujuService) NewInstanceId() instance.Id {
 	s.instanceCount += 1
 	return instance.Id(fmt.Sprintf("id-%d", s.instanceCount))
+}
+
+// Dump configuration files to the given JUJU_DATA directory.
+// The environ object is typically provided by JujuConnSuite.Environ.
+func (s *FakeJujuService) WriteJujuData(
+	environ environs.Environ, config controller.Config, path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		err = os.Mkdir(path, 0755)
+		if err != nil {
+			return err
+		}
+	}
+
+	uuid := config.ControllerUUID()
+	port := config.APIPort()
+	info, err := environs.APIInfo(
+		uuid,
+		testing.ModelTag.Id(),
+		testing.CACert,
+		port,
+		environ)
+	if err != nil {
+		return err
+	}
+
+	osenv.SetJujuXDGDataHome(path)
+
+	if err := s.writeJujuDataControllers(uuid, info.CACert, port); err != nil {
+		return err
+	}
+	if err := s.writeJujuDataAccounts(); err != nil {
+		return err
+	}
+	if err := s.writeJujuDataModels(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Write controllers.yaml
+func (s *FakeJujuService) writeJujuDataControllers(uuid, caCert string, port int) error {
+	controllers := &jujuclient.Controllers{
+		Controllers: map[string]jujuclient.ControllerDetails{
+			"fake-juju": jujuclient.ControllerDetails{
+				ControllerUUID: uuid,
+				APIEndpoints:   []string{fmt.Sprintf("localhost:%d", port)},
+				CACert:         caCert,
+				AgentVersion:   version.Current.String(),
+			},
+		},
+		CurrentController: "fake-juju",
+	}
+	return jujuclient.WriteControllersFile(controllers)
+}
+
+// Write accounts.yaml
+func (s *FakeJujuService) writeJujuDataAccounts() error {
+	accounts := map[string]jujuclient.AccountDetails{
+		"fake-juju": jujuclient.AccountDetails{
+			User:     "admin",
+			Password: "dummy-secret",
+		},
+	}
+	return jujuclient.WriteAccountsFile(accounts)
+}
+
+// Write models.yaml
+func (s *FakeJujuService) writeJujuDataModels() error {
+
+	models := &jujuclient.ControllerModels{
+		Models: map[string]jujuclient.ModelDetails{
+			"admin/controller": jujuclient.ModelDetails{
+				ModelUUID: "deadbeef-0bad-400d-8000-4b1d0d06f00d",
+			},
+		},
+		CurrentModel: "admin/controller",
+	}
+	return jujuclient.WriteModelsFile(map[string]*jujuclient.ControllerModels{
+		"fake-juju": models,
+	})
 }

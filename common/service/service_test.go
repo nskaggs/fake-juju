@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"testing"
+	"path/filepath"
 
 	gc "gopkg.in/check.v1"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/juju/juju/testing/factory"
 	"github.com/juju/juju/version"
 	"github.com/juju/utils"
+	"github.com/juju/juju/jujuclient"
 
 	coretesting "github.com/juju/juju/juju/testing"
 	jujutesting "github.com/juju/juju/testing"
@@ -59,6 +61,20 @@ func (s *FakeJujuServiceSuite) TestInitializeController(c *gc.C) {
 		tools.Version.String(),
 		gc.Equals,
 		version.Current.String()+"-xenial-amd64")
+}
+
+// The WriteJujuData() method writes config files to a directory that
+// can be used as JUJU_DATA for using command line tools against fake juju.
+func (s *FakeJujuServiceSuite) TestWriteJujuData(c *gc.C) {
+	path := c.MkDir()
+
+	err := s.service.WriteJujuData(s.Environ, s.ControllerConfig, path)
+	c.Assert(err, gc.IsNil)
+
+	controllers, err := jujuclient.ReadControllersFile(
+		filepath.Join(path, "controllers.yaml"))
+	c.Assert(err, gc.IsNil)
+	c.Assert(controllers.CurrentController, gc.Equals, "fake-juju")
 }
 
 var _ = gc.Suite(&FakeJujuServiceSuite{})

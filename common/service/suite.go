@@ -45,10 +45,20 @@ func (s *FakeJujuSuite) SetUpTest(c *gc.C) {
 	})
 	err = s.service.InitializeController(controller)
 	c.Assert(err, gc.IsNil)
+
+	if s.options.JujuData == "" {
+		s.options.JujuData = c.MkDir()
+	}
+	err = s.service.WriteJujuData(
+		s.Environ, s.ControllerConfig, s.options.JujuData)
+	c.Assert(err, gc.IsNil)
 }
 
 func (s *FakeJujuSuite) TestStart(c *gc.C) {
-	log.Infof("Initializing TestStart of the test suite")
+	log.Infof(
+		"service is ready: run 'export JUJU_DATA=%s' to use the regular juju cli",
+		s.options.JujuData)
+
 	// TODO: implement actual fake-juju logic. For now we just wait forever
 	// until SIGINT (ctrl-c) or SIGTERM is received.
 	channel := make(chan os.Signal, 2)

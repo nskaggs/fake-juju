@@ -26,6 +26,7 @@ func RunFakeJuju() int {
 	mongo := flags.Int("mongo", 0, "MongoDB port to use (on localhost)")
 	cert := flags.String("cert", "/usr/share/fake-juju/cert", "Certificate directory")
 	series := flags.String("series", "xenial", "Ubuntu series")
+	data := flags.String("juju-data", "", "Directory to populate with JUJU_DATA files")
 	flags.Parse(os.Args[1:])
 
 	options := &FakeJujuOptions{
@@ -34,6 +35,7 @@ func RunFakeJuju() int {
 		Mongo:  *mongo,
 		Cert:   *cert,
 		Level:  loggo.INFO,
+		JujuData: *data,
 	}
 	suite := &FakeJujuSuite{
 		options: options,
