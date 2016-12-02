@@ -1,9 +1,12 @@
-JUJU_VERSIONS = 1.25.6 2.0.0 2.0.2
+JUJU_VERSIONS = 2.0.2
 
 JUJUCLIENT_DOWNLOADS = $(shell pwd)/tests/jujuclient-archive
 JUJUCLIENT_REQ = $(JUJUCLIENT_DOWNLOADS)/requirements
 
 PYTHON = python
+
+.PHONY: all
+all: build test
 
 .PHONY: build
 build:
@@ -21,13 +24,13 @@ install:
 clean:
 	for VERSION in $(JUJU_VERSIONS) ; do \
 	    $(MAKE) -C $$VERSION clean; \
-	done	
+	done
 
 .PHONY: test py-test
 test: build
 	# Use xargs here so that we don't throw away the return codes, and
 	# correctly fail if any of the tests fail
-	@echo -n $(JUJU_VERSIONS) | xargs -t -d' ' -I {} $(MAKE) -C {} test JUJU_VERSION={}
+	@echo -n $(JUJU_VERSIONS) | xargs -t -d' ' -I {} $(MAKE) -C {} unit-test
 
 .PHONY: py-test
 py-test:
