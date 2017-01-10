@@ -1,8 +1,13 @@
 import os
+import json
 
 import yaml
 
-from subprocess import check_call
+from subprocess import (
+    check_output,
+    check_call,
+    STDOUT,
+)
 
 from testtools import TestCase
 
@@ -61,28 +66,20 @@ class FakeJujuIntegrationTest(TestCase):
 
     def test_cli_bootstrap(self):
         """
-        The command line performs a fake bootstrap and populates JUJU_DATA.
+        The fake-juju command line tool can perform a fake bootstrap. After the
+        bootstrap the controller machine (machine 0) is present and started.
         """
         juju_data = self.useFixture(TempDir())
         self.useFixture(EnvironmentVariable("JUJU_DATA", juju_data.path))
         check_call([FAKE_JUJU, "bootstrap", "foo", "bar"])
 
-        with open(juju_data.join("controllers.yaml")) as fd:
-            controllers = yaml.load(fd)
-            self.assertEqual(
-                CONTROLLER_UUID, controllers["controllers"]["bar"]["uuid"])
+        check_call([FAKE_JUJU, "switch", "bar"])
 
-        with open(juju_data.join("accounts.yaml")) as fd:
-            accounts = yaml.load(fd)
-            self.assertEqual(
-                {"bar": {"password": "dummy-secret", "user": "admin"}},
-                accounts["controllers"])
+        output = check_output([FAKE_JUJU, "status", "--format=json"])
+        status = json.loads(output)
 
-        with open(juju_data.join("models.yaml")) as fd:
-            models = yaml.load(fd)
-            self.assertEqual(
-                {"admin/controller": {"uuid": MODEL_UUID}},
-                models["controllers"]["bar"]["models"])
-            self.assertEqual(
-                "admin/controller",
-                models["controllers"]["bar"]["current-model"])
+        self.assertEqual(
+            "running", status["machines"]["0"]["machine-status"]["current"])
+
+        self.assertEqual(
+            "started", status["machines"]["0"]["juju-status"]["current"])

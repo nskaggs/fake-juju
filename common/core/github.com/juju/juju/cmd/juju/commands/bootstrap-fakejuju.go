@@ -28,6 +28,11 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 	controller := c.controllerName
 	model := "controller"
 
+	logger.Debugf("bootstrapping %s:%s", controller, model)
+
+	if err := testing.SetCerts(os.Getenv("FAKE_JUJUD_CERTS")); err != nil {
+	}
+
 	if err := writeControllersFile(store, controller); err != nil {
 		return err
 	}
@@ -41,6 +46,11 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 	}
 
 	if err := store.SetCurrentModel(controller, model); err != nil {
+		return err
+	}
+
+	// Perform a bootstrap request against fake-juju
+	if err := postFakeJujuRequest("bootstrap"); err != nil {
 		return err
 	}
 
@@ -81,7 +91,7 @@ func writeModelsFile(store jujuclient.ClientStore, controller, model string) err
 
 // Figure the port that fake-jujud is listening to.
 func getFakeJujudPort() (port int, err error) {
-	port = 17079  // the default
+	port = 17079 // the default
 	if os.Getenv("FAKE_JUJUD_PORT") != "" {
 		port, err = strconv.Atoi(os.Getenv("FAKE_JUJUD_PORT"))
 		if err != nil {

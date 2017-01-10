@@ -12,6 +12,7 @@ import (
 	"github.com/juju/utils"
 
 	coretesting "github.com/juju/juju/juju/testing"
+	"github.com/juju/juju/status"
 	jujutesting "github.com/juju/juju/testing"
 
 	"../service"
@@ -26,17 +27,21 @@ func (s *FakeJujuServiceSuite) SetUpTest(c *gc.C) {
 	s.JujuConnSuite.SetUpTest(c)
 
 	options := &service.FakeJujuOptions{
-		Mongo: -1,  // Use the MongoDB instance that the suite will setup
+		Mongo:  -1, // Use the MongoDB instance that the suite will setup
+		Series: "xenial",
 	}
-	s.service = service.NewFakeJujuService(s.State, s.APIState, options)
+	s.service = service.NewFakeJujuService(s.BackingState, s.APIState, options)
 }
 
 // The Initialize() method performs various initialization tasks.
 func (s *FakeJujuServiceSuite) TestInitialize(c *gc.C) {
 	err := s.service.Initialize()
 	c.Assert(err, gc.IsNil)
+
+	// We want to be able to access the charm store
 	c.Assert(utils.OutgoingAccessAllowed, gc.Equals, true)
 
+	// There's a space defined
 	ports, err := s.State.APIHostPorts()
 	c.Assert(err, gc.IsNil)
 	c.Assert(string(ports[0][0].SpaceName), gc.Equals, "dummy-provider-network")
@@ -59,6 +64,22 @@ func (s *FakeJujuServiceSuite) TestInitializeController(c *gc.C) {
 		tools.Version.String(),
 		gc.Equals,
 		version.Current.String()+"-xenial-amd64")
+
+	// The machine machine is configured and started
+	machineStatus, err := machine.Status()
+	c.Check(err, gc.IsNil)
+	c.Check(machineStatus.Status, gc.Equals, status.Started)
+
+	instanceStatus, err := machine.InstanceStatus()
+	c.Check(err, gc.IsNil)
+	c.Check(instanceStatus.Status, gc.Equals, status.Running)
+
+	s.State.StartSync()
+	err = machine.WaitAgentPresence(jujutesting.ShortWait)
+	c.Assert(err, gc.IsNil)
+	alive, err := machine.AgentPresence()
+	c.Assert(err, gc.IsNil)
+	c.Assert(alive, gc.Equals, true)
 }
 
 var _ = gc.Suite(&FakeJujuServiceSuite{})

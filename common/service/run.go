@@ -242,11 +242,7 @@ func (f *FakeJujuRunner) Wait() *gc.Result {
 // Log a summary of the service run
 func logResult(result *gc.Result) {
 	if !(result.Succeeded == 1) {
-		message := "Unknown error"
-		if result.RunError != nil {
-			message = result.RunError.Error()
-		}
-		log.Infof("Service finished uncleanly: %s", message)
+		log.Infof("Service finished uncleanly: %s", result.String())
 	} else {
 		log.Infof("Service finished cleanly")
 	}
