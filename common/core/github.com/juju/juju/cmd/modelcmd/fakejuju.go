@@ -1,18 +1,21 @@
 // Simple HTTP client for the fake-jujud control-plan API
 
-package commands
+package modelcmd
 
 import (
 	"bytes"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
+
+	"github.com/juju/errors"
 )
 
 // Perform a POST HTTP request against the given fake-juju control plane path.
-func postFakeJujuRequest(path string) error {
-	port, err := getFakeJujudPort()
+func PostFakeJujuRequest(path string) error {
+	port, err := GetFakeJujudPort()
 	if err != nil {
 		return err
 	}
@@ -42,4 +45,16 @@ func postFakeJujuRequest(path string) error {
 	}
 
 	return nil
+}
+
+// Figure the port that fake-jujud is listening to.
+func GetFakeJujudPort() (port int, err error) {
+	port = 17079 // the default
+	if os.Getenv("FAKE_JUJUD_PORT") != "" {
+		port, err = strconv.Atoi(os.Getenv("FAKE_JUJUD_PORT"))
+		if err != nil {
+			return 0, errors.Annotate(err, "invalid port number")
+		}
+	}
+	return port, nil
 }

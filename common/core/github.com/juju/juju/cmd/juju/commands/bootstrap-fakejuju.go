@@ -3,9 +3,6 @@ package commands
 import (
 	"fmt"
 	"os"
-	"strconv"
-
-	"github.com/juju/errors"
 
 	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/testing"
@@ -50,7 +47,7 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 	}
 
 	// Perform a bootstrap request against fake-juju
-	if err := postFakeJujuRequest("bootstrap"); err != nil {
+	if err := modelcmd.PostFakeJujuRequest("bootstrap"); err != nil {
 		return err
 	}
 
@@ -59,7 +56,7 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 
 // Write a fake controllers.yaml
 func writeControllersFile(store jujuclient.ClientStore, controller string) error {
-	port, err := getFakeJujudPort()
+	port, err := modelcmd.GetFakeJujudPort()
 	if err != nil {
 		return err
 	}
@@ -87,16 +84,4 @@ func writeModelsFile(store jujuclient.ClientStore, controller, model string) err
 		ModelUUID: testing.ModelTag.Id(),
 	}
 	return store.UpdateModel(controller, model, details)
-}
-
-// Figure the port that fake-jujud is listening to.
-func getFakeJujudPort() (port int, err error) {
-	port = 17079 // the default
-	if os.Getenv("FAKE_JUJUD_PORT") != "" {
-		port, err = strconv.Atoi(os.Getenv("FAKE_JUJUD_PORT"))
-		if err != nil {
-			return 0, errors.Annotate(err, "invalid port number")
-		}
-	}
-	return port, nil
 }
