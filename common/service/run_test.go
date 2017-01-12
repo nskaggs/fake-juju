@@ -6,6 +6,7 @@ import (
 
 	gc "gopkg.in/check.v1"
 
+	"github.com/juju/juju/api"
 	"github.com/juju/testing"
 	"github.com/juju/loggo"
 
@@ -58,7 +59,6 @@ func (s *FakeJujuRunnerSuite) TestBootstrapAPI(c *gc.C) {
 		c.Log(s.output.String())
 		c.Error(err.Error())
 	}
-	fmt.Printf(s.output.String())
 }
 
 var _ = gc.Suite(&FakeJujuRunnerSuite{})
