@@ -45,4 +45,20 @@ func (s *FakeJujuRunnerSuite) TestRun(c *gc.C) {
 		strings.Contains(s.output.String(), "Starting service"), gc.Equals, true)
 }
 
+// The "bootstrap" API endpoint setups up a new controller backed by the
+// dummy provider.
+func (s *FakeJujuRunnerSuite) TestBootstrapAPI(c *gc.C) {
+	s.runner.Run()
+	defer s.runner.Wait()
+	defer s.runner.Stop()
+
+	client := api.NewFakeJujuClientWithPort(12346)
+	err := client.Bootstrap()
+	if err != nil {
+		c.Log(s.output.String())
+		c.Error(err.Error())
+	}
+	fmt.Printf(s.output.String())
+}
+
 var _ = gc.Suite(&FakeJujuRunnerSuite{})
