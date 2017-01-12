@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/juju/juju/api"
 	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/testing"
 	"github.com/juju/juju/version"
@@ -47,7 +48,11 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 	}
 
 	// Perform a bootstrap request against fake-juju
-	if err := modelcmd.PostFakeJujuRequest("bootstrap"); err != nil {
+	client, err := api.NewFakeJujuClient()
+	if err != nil {
+		return err
+	}
+	if err := client.Bootstrap(); err != nil {
 		return err
 	}
 
@@ -56,7 +61,7 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 
 // Write a fake controllers.yaml
 func writeControllersFile(store jujuclient.ClientStore, controller string) error {
-	port, err := modelcmd.GetFakeJujudPort()
+	port, err := api.GetFakeJujudPort()
 	if err != nil {
 		return err
 	}
