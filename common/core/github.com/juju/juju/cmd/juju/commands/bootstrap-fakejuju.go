@@ -61,7 +61,11 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 	if err != nil {
 		return err
 	}
-	logger.Infof("CLIENT %v", client)
+	version, err := client.AgentVersion()
+	if err != nil {
+		return err
+	}
+	logger.Debugf("fake-jujud agent version %s", version.String())
 
 	return nil
 }
