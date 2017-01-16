@@ -54,7 +54,7 @@ func RunFakeJuju() int {
 		Series: *series,
 		Mongo:  *mongo,
 		Cert:   *cert,
-		Level:  loggo.INFO,
+		Level:  loggo.DEBUG,
 		Port:   *port,
 	}
 
@@ -105,6 +105,17 @@ func (f *FakeJujuRunner) Run() {
 	setupLogging(f.options.Output, f.options.Level)
 	log.Infof("Starting service")
 
+	// If given, the certificates that the service will
+	// use. This option is unset only in unit tests.
+	if f.options.Cert != "" {
+		err := coretesting.SetCerts(f.options.Cert)
+		if err != nil {
+			f.result <- &gc.Result{RunError: err}
+			return
+		}
+	}
+
+
 	// The github.com/juju/testing/mgo.go list of possible mongod paths
 	// doesn't include the path to juju's custom mongod package, so we
 	// we force it via this environment variable.
@@ -112,16 +123,6 @@ func (f *FakeJujuRunner) Run() {
 
 	if f.options.Mongo > 0 { // Use an external MongoDB instance
 		log.Infof("Using external MongoDB on port %d", f.options.Mongo)
-
-		// If given, the certificates that the service will
-		// use. This option is unset only in unit tests.
-		if f.options.Cert != "" {
-			err := SetCerts(f.options.Cert)
-			if err != nil {
-				f.result <- &gc.Result{RunError: err}
-				return
-			}
-		}
 
 		jujutesting.SetExternalMgoServer(
 			"localhost", f.options.Mongo, coretesting.Certs)

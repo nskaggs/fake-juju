@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/juju/juju/api"
+	"github.com/juju/juju/cmd/modelcmd"
 	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/testing"
 	"github.com/juju/juju/version"
@@ -47,14 +48,20 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 		return err
 	}
 
-	// Perform a bootstrap request against fake-juju
-	client, err := api.NewFakeJujuClient()
+	// Connect to fake-jujud and create a new controller
+	if err := performBootstrap(); err != nil {
+		return nil
+	}
+
+	// Ensure that the setup is valid
+	if err := c.SetModelName(modelcmd.JoinModelName(controller, model)); err != nil {
+		return err
+	}
+	client, err := c.NewAPIClient()
 	if err != nil {
 		return err
 	}
-	if err := client.Bootstrap(); err != nil {
-		return err
-	}
+	logger.Infof("CLIENT %v", client)
 
 	return nil
 }
@@ -69,7 +76,7 @@ func writeControllersFile(store jujuclient.ClientStore, controller string) error
 		ControllerUUID: testing.ControllerTag.Id(),
 		CACert:         testing.CACert,
 		AgentVersion:   version.Current.String(),
-		APIEndpoints:   []string{fmt.Sprintf("localhost:%d", port)},
+		APIEndpoints:   []string{fmt.Sprintf("localhost:%d", port - 1)},
 	}
 	return store.AddController(controller, details)
 }
@@ -89,4 +96,16 @@ func writeModelsFile(store jujuclient.ClientStore, controller, model string) err
 		ModelUUID: testing.ModelTag.Id(),
 	}
 	return store.UpdateModel(controller, model, details)
+}
+
+// Perform a fake bootstrap by connecting to the faje-jujud service
+// using the control API.
+func performBootstrap() error {
+
+	// Perform a bootstrap request against fake-juju
+	client, err := api.NewFakeJujuClient()
+	if err != nil {
+		return err
+	}
+	return client.Bootstrap()
 }
