@@ -7,6 +7,7 @@ from subprocess import (
     check_output,
     check_call,
     STDOUT,
+    PIPE,
 )
 
 from testtools import TestCase
@@ -21,6 +22,7 @@ from txfixtures import Reactor
 
 from fakejuju.fixture import (
     ROOT,
+    CERT,
     JujuMongoDB,
     FakeJuju,
 )
@@ -71,15 +73,15 @@ class FakeJujuIntegrationTest(TestCase):
         """
         juju_data = self.useFixture(TempDir())
         self.useFixture(EnvironmentVariable("JUJU_DATA", juju_data.path))
+        self.useFixture(EnvironmentVariable("FAKE_JUJUD_CERTS", CERT))
         check_call([FAKE_JUJU, "bootstrap", "foo", "bar"])
-
-        check_call([FAKE_JUJU, "switch", "bar"])
+        check_call([FAKE_JUJU, "switch", "bar"], stdout=PIPE, stderr=STDOUT)
 
         output = check_output([FAKE_JUJU, "status", "--format=json"])
         status = json.loads(output)
 
         self.assertEqual(
-            "running", status["machines"]["0"]["machine-status"]["current"])
+            "pending", status["machines"]["0"]["machine-status"]["current"])
 
         self.assertEqual(
-            "started", status["machines"]["0"]["juju-status"]["current"])
+            "pending", status["machines"]["0"]["juju-status"]["current"])

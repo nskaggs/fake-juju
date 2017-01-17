@@ -54,7 +54,7 @@ func RunFakeJuju() int {
 		Series: *series,
 		Mongo:  *mongo,
 		Cert:   *cert,
-		Level:  loggo.DEBUG,
+		Level:  loggo.INFO,
 		Port:   *port,
 	}
 
