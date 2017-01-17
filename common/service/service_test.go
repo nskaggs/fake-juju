@@ -49,16 +49,16 @@ func (s *FakeJujuServiceSuite) TestInitialize(c *gc.C) {
 
 // The InitializeController() method configures the controller machine.
 func (s *FakeJujuServiceSuite) TestInitializeController(c *gc.C) {
-	controller := s.Factory.MakeMachine(c, &factory.MachineParams{
+	machine := s.Factory.MakeMachine(c, &factory.MachineParams{
 		InstanceId: s.service.NewInstanceId(),
 		Nonce:      agent.BootstrapNonce,
 		Jobs:       []state.MachineJob{state.JobManageModel, state.JobHostUnits},
 		Series:     "xenial",
 	})
-	err := s.service.InitializeController(controller)
+	err := s.service.InitializeController(machine)
 	c.Assert(err, gc.IsNil)
 
-	tools, err := controller.AgentTools()
+	tools, err := machine.AgentTools()
 	c.Assert(err, gc.IsNil)
 	c.Assert(
 		tools.Version.String(),
