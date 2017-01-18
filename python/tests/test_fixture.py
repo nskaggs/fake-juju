@@ -96,4 +96,5 @@ class FakeJujuIntegrationTest(TestCase):
         check_call([FAKE_JUJU, "switch", "bar"], stdout=PIPE, stderr=STDOUT)
         check_call([FAKE_JUJU, "destroy-controller", "-y", "bar"])
         self.assertRaises(
-            CalledProcessError, check_call, [FAKE_JUJU, "status"], stderr=STDOUT)
+            CalledProcessError,
+            check_call, [FAKE_JUJU, "status"], stdout=PIPE, stderr=STDOUT)
