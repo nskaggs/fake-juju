@@ -50,7 +50,7 @@ func (c *bootstrapCommand) fakeJujuBootstrap() error {
 
 	// Connect to fake-jujud and create a new controller
 	if err := performBootstrap(); err != nil {
-		return nil
+		return err
 	}
 
 	// Ensure that the setup is valid
